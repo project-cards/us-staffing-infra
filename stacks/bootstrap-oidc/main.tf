@@ -119,9 +119,9 @@ resource "aws_iam_role" "dev" {
 }
 
 resource "aws_iam_role" "prod" {
-  name               = "us-staffing-github-prod"
-  description        = "Used by GitHub Actions on main to deploy prod infrastructure"
-  assume_role_policy = data.aws_iam_policy_document.prod_trust.json
+  name                 = "us-staffing-github-prod"
+  description          = "Used by GitHub Actions on main to deploy prod infrastructure"
+  assume_role_policy   = data.aws_iam_policy_document.prod_trust.json
   max_session_duration = 3600
 }
 
