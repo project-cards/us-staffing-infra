@@ -1,0 +1,20 @@
+# Terraform working files (downloaded plugins, plans)
+**/.terraform/
+**/tfplan
+**/*.tfplan
+crash.log
+crash.*.log
+
+# State files: NEVER commit. State holds secrets and lives in S3.
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfstate.backup
+
+# Local variable files that may hold values (commit only *.example)
+*.auto.tfvars
+terraform.tfvars
+
+# Editor and OS noise
+.DS_Store
+.idea/
+.vscode/
