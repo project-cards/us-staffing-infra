@@ -1,0 +1,121 @@
+# ----------------------------------------------------------------------------
+# terraform-lock-test.yml
+#
+# A pipeline that runs Terraform for the lock-test stack.
+#
+# Simple picture: this is a kitchen with two stations.
+#   - PLAN  (the order is written down and shown to the chef before cooking)
+#           runs on every pull request into develop. Nothing changes in AWS.
+#   - APPLY (the chef cooks the order)
+#           runs only after the pull request is merged into develop.
+#
+# Both stations use the DEV role, through GitHub OIDC (no AWS keys stored).
+# ----------------------------------------------------------------------------
+
+name: terraform-lock-test
+
+on:
+  pull_request:
+    branches: [develop]
+    paths: ["stacks/**", "modules/**", ".github/workflows/terraform-lock-test.yml"]
+  push:
+    branches: [develop]
+    paths: ["stacks/**", "modules/**", ".github/workflows/terraform-lock-test.yml"]
+  workflow_dispatch: {} # lets you start it by hand from the Actions tab
+
+# Least privilege: the workflow gets only what it needs.
+permissions:
+  contents: read   # read the code
+  id-token: write  # ask GitHub for an ID card (OIDC), needed to log in to AWS
+
+env:
+  TF_IN_AUTOMATION: "true"
+  AWS_REGION: ap-south-1
+  STACK_DIR: stacks/lock-test
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # PLAN: show what would change. Changes nothing.
+  # ---------------------------------------------------------------------------
+  plan:
+    name: Plan (dev)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.2
+          terraform_wrapper: false # lets us capture the plan output as plain text
+
+      - name: Log in to AWS with the dev role (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: plan-${{ github.run_id }}
+
+      - name: Check formatting and syntax
+        working-directory: ${{ env.STACK_DIR }}
+        run: |
+          terraform fmt -check -recursive
+          terraform init -input=false
+          terraform validate -no-color
+
+      - name: Plan (takes the lock, then releases it)
+        working-directory: ${{ env.STACK_DIR }}
+        shell: bash
+        run: |
+          set -o pipefail
+          terraform plan -no-color -input=false -lock-timeout=2m | tee plan.txt
+
+      - name: Show the plan in the run summary
+        if: always()
+        working-directory: ${{ env.STACK_DIR }}
+        run: |
+          {
+            echo "## Terraform plan (lock-test)"
+            echo '```hcl'
+            tail -n 60 plan.txt 2>/dev/null || echo "no plan output"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # APPLY: make the change. Runs only on develop, only after the plan job passed.
+  # ---------------------------------------------------------------------------
+  apply:
+    name: Apply (dev)
+    needs: plan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+
+    # Runs in this group are queued one after another, never at the same time.
+    # This is a second safety net, on top of the Terraform lock table.
+    concurrency:
+      group: terraform-lock-test-dev
+      cancel-in-progress: false
+
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.2
+          terraform_wrapper: false
+
+      - name: Log in to AWS with the dev role (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: apply-${{ github.run_id }}
+
+      - name: Apply
+        working-directory: ${{ env.STACK_DIR }}
+        run: |
+          terraform init -input=false
+          terraform apply -auto-approve -input=false -no-color -lock-timeout=5m
