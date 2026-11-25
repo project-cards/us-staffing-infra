@@ -23,4 +23,15 @@ Bucket: `us-staffing-tfstate-061624868468-ap-south-1`
 - Nodes: 2 to start, with room to scale
 - Interface endpoints: none for now
 
+## Dev subnets (checked: no overlaps)
+
+| Subnet | Range | Addresses |
+|---|---|---|
+| Public, zone A | `10.10.0.0/24` | 256 |
+| Public, zone B | `10.10.1.0/24` | 256 |
+| App, zone A | `10.10.4.0/22` | 1,024 |
+| App, zone B | `10.10.8.0/22` | 1,024 |
+| Database, zone A | `10.10.20.0/24` | 256 |
+| Database, zone B | `10.10.21.0/24` | 256 |
+
 No secrets in this folder.
