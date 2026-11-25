@@ -141,3 +141,94 @@ resource "aws_iam_role_policy_attachment" "prod_admin" {
   role       = aws_iam_role.prod.name
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }
+
+# ----------------------------------------------------------------------------
+# PLAN ROLE (for pull requests)
+#
+# Simple picture: a visitor pass. It lets the pipeline READ everything, so it can
+# make a plan, and WRITE only what a plan needs: the lock row and the lock file.
+# It cannot create, change or delete infrastructure.
+#
+# Why a separate role: a pull request is not reviewed yet, so it must not be able
+# to change anything. Only merges into develop get the dev role.
+# ----------------------------------------------------------------------------
+
+# The pull request badge: "repo:<org>/<repo>:pull_request" (no branch in it).
+data "aws_iam_policy_document" "plan_trust" {
+  statement {
+    sid     = "GitHubPullRequestOnly"
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["repo:${var.github_org}/${var.infra_repo}:pull_request"]
+    }
+  }
+}
+
+resource "aws_iam_role" "plan" {
+  name                 = "us-staffing-github-plan"
+  description          = "Used by GitHub Actions on pull requests to run terraform plan (read-only plus lock writes)"
+  assume_role_policy   = data.aws_iam_policy_document.plan_trust.json
+  max_session_duration = 3600
+}
+
+# Read everything (AWS's ready-made read-only policy).
+resource "aws_iam_role_policy_attachment" "plan_readonly" {
+  role       = aws_iam_role.plan.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+# The few writes a plan needs, and nothing more.
+data "aws_kms_alias" "tfstate" {
+  name = "alias/us-staffing-tfstate"
+}
+
+data "aws_iam_policy_document" "plan_writes" {
+  # Lock row in DynamoDB (legacy locking, used by lock-test).
+  statement {
+    sid    = "LockRowForPlan"
+    effect = "Allow"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:DeleteItem",
+    ]
+    resources = ["arn:aws:dynamodb:${var.region}:${data.aws_caller_identity.current.account_id}:table/us-staffing-tfstate-lock"]
+  }
+
+  # Lock file in S3 (native locking, used by bootstrap stacks).
+  statement {
+    sid       = "LockFileForPlan"
+    effect    = "Allow"
+    actions   = ["s3:PutObject", "s3:DeleteObject"]
+    resources = ["arn:aws:s3:::us-staffing-tfstate-${data.aws_caller_identity.current.account_id}-${var.region}/*.tflock"]
+  }
+
+  # Decrypt the state so a plan can read it.
+  statement {
+    sid       = "DecryptStateForPlan"
+    effect    = "Allow"
+    actions   = ["kms:Decrypt"]
+    resources = [data.aws_kms_alias.tfstate.target_key_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "plan_writes" {
+  name   = "plan-lock-and-decrypt"
+  role   = aws_iam_role.plan.id
+  policy = data.aws_iam_policy_document.plan_writes.json
+}

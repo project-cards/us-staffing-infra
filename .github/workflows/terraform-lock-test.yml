@@ -53,7 +53,7 @@ jobs:
       - name: Log in to AWS with the dev role (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN_DEV }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_PLAN }}   # read-only role for pull requests
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: plan-${{ github.run_id }}
 
