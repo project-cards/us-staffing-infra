@@ -19,6 +19,21 @@ variable "github_org" {
   default     = "project-cards"
 }
 
+# Numeric IDs of the org and the infra repo. GitHub's "immutable subject" setting
+# puts these numbers into the pipeline's ID card, so the trust rules must match them.
+# Find them with: gh api repos/project-cards/us-staffing-infra --jq '.id, .owner.id'
+variable "github_org_id" {
+  description = "Numeric ID of the GitHub organisation (see the note above)."
+  type        = string
+  default     = "306973792"
+}
+
+variable "infra_repo_id" {
+  description = "Numeric ID of the infra repo (see the note above)."
+  type        = string
+  default     = "1470051796"
+}
+
 variable "app_repos" {
   description = "App repos allowed to use the roles, for example to push images to ECR."
   type        = list(string)

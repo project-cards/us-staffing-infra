@@ -41,14 +41,17 @@ resource "aws_iam_openid_connect_provider" "github" {
 # the repo use the role, so we avoid them.
 # ----------------------------------------------------------------------------
 locals {
-  # Dev role: infra repo on develop, and the app repos on develop (for pushing images).
-  dev_subjects = concat(
-    ["repo:${var.github_org}/${var.infra_repo}:ref:refs/heads/${var.dev_branch}"],
-    [for r in var.app_repos : "repo:${var.github_org}/${r}:ref:refs/heads/${var.dev_branch}"]
-  )
+  # The start of every ID card's "sub" for the infra repo. With immutable subjects,
+  # the org and repo numbers are included, so the text must match exactly.
+  infra_subject_prefix = "repo:${var.github_org}@${var.github_org_id}/${var.infra_repo}@${var.infra_repo_id}"
+
+  # Dev role: infra repo on develop only.
+  # App repos (for pushing images to ECR) are NOT listed yet: their numeric IDs are
+  # needed first. We add them when the ECR stack is built.
+  dev_subjects = ["${local.infra_subject_prefix}:ref:refs/heads/${var.dev_branch}"]
 
   # Prod role: infra repo on main only.
-  prod_subjects = ["repo:${var.github_org}/${var.infra_repo}:ref:refs/heads/${var.prod_branch}"]
+  prod_subjects = ["${local.infra_subject_prefix}:ref:refs/heads/${var.prod_branch}"]
 }
 
 data "aws_iam_policy_document" "dev_trust" {
@@ -174,7 +177,7 @@ data "aws_iam_policy_document" "plan_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_org}/${var.infra_repo}:pull_request"]
+      values   = ["${local.infra_subject_prefix}:pull_request"]
     }
   }
 }
