@@ -17,10 +17,10 @@ name: terraform-lock-test
 on:
   pull_request:
     branches: [develop]
-    paths: ["stacks/**", "modules/**", ".github/workflows/terraform-lock-test.yml"]
+    paths: ["stacks/**", "modules/**", "envs/**", ".github/workflows/terraform-lock-test.yml"]
   push:
     branches: [develop]
-    paths: ["stacks/**", "modules/**", ".github/workflows/terraform-lock-test.yml"]
+    paths: ["stacks/**", "modules/**", "envs/**", ".github/workflows/terraform-lock-test.yml"]
   workflow_dispatch: {} # lets you start it by hand from the Actions tab
 
 # Least privilege: the workflow gets only what it needs.
