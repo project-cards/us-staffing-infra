@@ -16,6 +16,11 @@ output "prod_role_arn" {
   value       = aws_iam_role.prod.arn
 }
 
+output "plan_role_arn" {
+  description = "Put this in GitHub as the repo variable AWS_ROLE_ARN_PLAN (used by pull request plans)."
+  value       = aws_iam_role.plan.arn
+}
+
 output "oidc_provider_arn" {
   description = "The GitHub identity provider registered in AWS."
   value       = aws_iam_openid_connect_provider.github.arn

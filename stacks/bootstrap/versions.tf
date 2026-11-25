@@ -29,7 +29,15 @@ terraform {
     }
   }
 
-  # No backend block here on purpose. This stack keeps its own state locally,
-  # because it creates the bucket that holds every other stack's state.
-  # Every later stack will have a backend "s3" block pointing at that bucket.
+  # Backend: where this stack's state lives.
+  # Simple version: the bucket is the shared notebook. This stack now keeps its
+  # page inside the same bucket it created, instead of on a laptop.
+  # Chicken-and-egg note: the bucket already exists, so this is safe to move into.
+  backend "s3" {
+    bucket       = "us-staffing-tfstate-061624868468-ap-south-1"
+    key          = "bootstrap/terraform.tfstate"
+    region       = "ap-south-1"
+    encrypt      = true
+    use_lockfile = true # S3 native locking (current approach)
+  }
 }
