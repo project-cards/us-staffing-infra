@@ -149,7 +149,7 @@ resource "aws_route_table" "app" {
 
   vpc_id = aws_vpc.this.id
 
-  tags = merge(var.tags, { Name = "${var.name}-app-rt-${var.azs[count.index]}" })
+  tags = merge(var.tags, { Name = "${var.name}-private-app-rt-${var.azs[count.index]}" })
 }
 
 resource "aws_route" "app_nat" {
@@ -172,7 +172,7 @@ resource "aws_route_table_association" "app" {
 resource "aws_route_table" "db" {
   vpc_id = aws_vpc.this.id
 
-  tags = merge(var.tags, { Name = "${var.name}-db-rt" })
+  tags = merge(var.tags, { Name = "${var.name}-private-db-rt" })
 }
 
 resource "aws_route_table_association" "db" {
