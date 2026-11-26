@@ -68,7 +68,7 @@ resource "aws_subnet" "app" {
   availability_zone = var.azs[count.index]
 
   tags = merge(var.tags, {
-    Name                              = "${var.name}-app-${var.azs[count.index]}"
+    Name                              = "${var.name}-private-app-${var.azs[count.index]}"
     tier                              = "app"
     "kubernetes.io/role/internal-elb" = "1"
   })
@@ -82,7 +82,7 @@ resource "aws_subnet" "db" {
   availability_zone = var.azs[count.index]
 
   tags = merge(var.tags, {
-    Name = "${var.name}-db-${var.azs[count.index]}"
+    Name = "${var.name}-private-db-${var.azs[count.index]}"
     tier = "database"
   })
 }
