@@ -27,6 +27,7 @@ module "eks" {
   admin_principal_arns = [
     "arn:aws:iam::061624868468:role/us-staffing-github-dev",
     "arn:aws:iam::061624868468:user/practice-admin",
+    "arn:aws:iam::061624868468:user/pavan",
   ]
 
   node_instance_types = ["t3.medium"]
