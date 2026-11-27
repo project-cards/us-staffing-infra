@@ -1,0 +1,109 @@
+# ----------------------------------------------------------------------------
+# terraform-dev-data.yml
+#
+# Runs Terraform for the DEV network.
+#
+# Same kitchen as before, two stations:
+#   - PLAN  on every pull request into develop (read-only role, changes nothing)
+#   - APPLY after the merge into develop (dev role, builds the VPC)
+# ----------------------------------------------------------------------------
+
+name: terraform-dev-data
+
+on:
+  pull_request:
+    branches: [develop]
+    paths: ["envs/dev/data/**", "modules/data/**", ".github/workflows/terraform-dev-data.yml"]
+  push:
+    branches: [develop]
+    paths: ["envs/dev/data/**", "modules/data/**", ".github/workflows/terraform-dev-data.yml"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TF_IN_AUTOMATION: "true"
+  AWS_REGION: ap-south-1
+  STACK_DIR: envs/dev/data
+
+jobs:
+  plan:
+    name: Plan (dev data)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.2
+          terraform_wrapper: false
+
+      - name: Log in to AWS (plan role on pull requests, dev role on merges)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ github.event_name == 'pull_request' && vars.AWS_ROLE_ARN_PLAN || vars.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: plan-data-${{ github.run_id }}
+
+      - name: Check formatting and syntax
+        working-directory: ${{ env.STACK_DIR }}
+        run: |
+          terraform fmt -check -recursive ../../../modules/data
+          terraform fmt -check
+          terraform init -input=false
+          terraform validate -no-color
+
+      - name: Plan
+        working-directory: ${{ env.STACK_DIR }}
+        shell: bash
+        run: |
+          set -o pipefail
+          terraform plan -no-color -input=false -lock-timeout=2m | tee plan.txt
+
+      - name: Show the plan in the run summary
+        if: always()
+        working-directory: ${{ env.STACK_DIR }}
+        run: |
+          {
+            echo "## Terraform plan (dev data)"
+            echo '```hcl'
+            tail -n 80 plan.txt 2>/dev/null || echo "no plan output"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    name: Apply (dev)
+    needs: plan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+
+    concurrency:
+      group: terraform-dev-data
+      cancel-in-progress: false
+
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.2
+          terraform_wrapper: false
+
+      - name: Log in to AWS (dev role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: apply-data-${{ github.run_id }}
+
+      - name: Apply
+        working-directory: ${{ env.STACK_DIR }}
+        run: |
+          terraform init -input=false
+          terraform apply -auto-approve -input=false -no-color -lock-timeout=5m
